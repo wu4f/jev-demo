@@ -114,3 +114,5 @@ deploying. A new Python import must also be copied into the runtime image.
 - Use the same parsed IP/access result for the status banner and API enforcement.
   Never replace the server check with a disabled button. Keep pages readable
   when denied and their IP-specific responses private/no-store.
+- Show the visitor's IP and access status, but never render the allowed CIDR
+  in page text, embedded browser configuration, or API denial messages.

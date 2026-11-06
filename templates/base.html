@@ -18,7 +18,7 @@
       <span class="network-dot" aria-hidden="true"></span>
       <div>
         <strong>{% if network_access.allowed %}TypeSafe access allowed{% else %}TypeSafe access denied{% endif %}</strong>
-        <span>Your IP: <code>{{ network_access.client_ip or 'Unknown' }}</code> · Allowed network: <code>{{ network_access.network }}</code></span>
+        <span>Your IP: <code>{{ network_access.client_ip or 'Unknown' }}</code></span>
         {% if not network_access.allowed %}
         <span>You can explore the pages, but running Jev requires a connection from the allowed network or a VPN that exits through it.</span>
         {% endif %}

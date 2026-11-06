@@ -226,7 +226,10 @@ def test_ip_status_and_api_enforcement(address, allowed, sdk, monkeypatch):
         assert f'"network_allowed": {str(allowed).lower()}' in page.text
         assert ('type="submit" disabled' in page.text) is not allowed
         assert page.headers["cache-control"] == "private, no-store"
+        for path in ["/", *(f"/demos/{slug}" for slug in DEMOS)]:
+            assert str(lab.ALLOWED_NETWORK) not in visitor.get(path).text
         result = visitor.post("/api/demos/support/run", json={"text": "Test"})
+        assert str(lab.ALLOWED_NETWORK) not in result.text
         # Allowed visitors reach configuration checking; denied visitors do not.
         assert result.status_code == (503 if allowed else 403)
         if not allowed:
@@ -288,7 +291,7 @@ def test_local_network_can_be_configured_for_development(sdk, monkeypatch):
         page = visitor.get("/")
     assert "network-allowed" in page.text
     assert "<code>127.0.0.1</code>" in page.text
-    assert "<code>127.0.0.0/8</code>" in page.text
+    assert "127.0.0.0/8" not in page.text
 
 
 def test_missing_socket_address_is_denied(sdk):

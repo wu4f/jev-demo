@@ -34,7 +34,6 @@ app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
 class NetworkAccess:
     client_ip: str | None
     allowed: bool
-    network: str
 
 
 @app.middleware("http")
@@ -56,7 +55,6 @@ async def identify_client(request: Request, call_next):
     request.state.network_access = NetworkAccess(
         client_ip=str(address) if address else None,
         allowed=address is not None and address in ALLOWED_NETWORK,
-        network=str(ALLOWED_NETWORK),
     )
     response = await call_next(request)
     if not request.url.path.startswith("/static/"):
@@ -136,7 +134,7 @@ async def run_demo(request: Request, slug: str, payload: RunInput):
         raise HTTPException(
             403,
             f"TypeSafe access denied for IP {access.client_ip or 'unknown'}. "
-            f"Connect from {access.network} or a VPN that exits through that network.",
+            "Connect from an authorized network or VPN.",
         )
     # Same-origin browser calls work locally and behind Cloud Run's TLS proxy.
     origin = request.headers.get("origin")
