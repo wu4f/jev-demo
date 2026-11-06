@@ -6,12 +6,13 @@
   server-side asynchronous TypeSafe SDK calls.
 - `demos.py`: the five demo definitions, examples, and typed Choice/Score/Noul
   questions. Keep page descriptions and actual questions consistent here.
-- `templates/`: Jinja pages. Static asset URLs must remain relative so the
-  authenticated Cloud Run proxy can serve them.
+- `templates/`: Jinja pages. Keep static asset URLs relative to the request
+  origin so direct Cloud Run and custom-domain access both work.
 - `static/app.js`: plain JavaScript for input editing, API calls, visualizations,
   previous-run comparison, and client-side decision thresholds.
 - `static/style.css`: responsive styles; there is no frontend build step.
-- `tests/test_app.py`: API and proxy behavior with a mocked TypeSafe SDK.
+- `tests/test_app.py`: API, IP filtering, and HTTPS origin behavior with a mocked
+  TypeSafe SDK.
 - `tests/test_deployment.py`: deployment scripts exercised with a fake gcloud.
 - `Dockerfile`, `.dockerignore`, `.gcloudignore`: non-root runtime and
   allowlisted build/upload contexts.
@@ -55,9 +56,8 @@ docker run --rm -p 8001:8080 jev-lab
 
 Without an injected key, `/health`, `/`, and all demo pages must work, while
 evaluation requests return 403 outside the network or an explicit configuration
-error inside it. Use these routes
-for container smoke checks without spending credits. Also verify a custom
-`PORT` when modifying the container startup command.
+error inside it. Use these routes for container smoke checks without spending
+credits. Also verify a custom `PORT` when modifying the container startup command.
 
 ## Secret handling and deployment
 
@@ -86,6 +86,60 @@ If adding runtime files, update the Dockerfile and both build-context
 allowlists. `gcloud meta list-files-for-upload` checks the source upload without
 deploying. A new Python import must also be copied into the runtime image.
 
+## Deployment target and custom domain
+
+- Public repository: `https://github.com/wu4f/jev-demo`, default branch `main`.
+- Cloud Run project: `pdx-cs-ai112`; region: `us-central1`; service: `jev-lab`.
+- Custom domain mapping: `jev.oregonctf.org` routes to `jev-lab`.
+- Authoritative DNS record: `jev.oregonctf.org. CNAME ghs.googlehosted.com.`
+  The DNS zone uses `ns-cloud-d1.googledomains.com` through
+  `ns-cloud-d4.googledomains.com`.
+- Do not alter the separate `askcs.oregonctf.org` service or its DNS records.
+
+The authenticated local proxy workflow was removed. Visitors open the Cloud Run
+HTTPS URL or custom domain directly, without `gcloud run services proxy`, a
+Google login, or an identity token. Both deployment paths enable unauthenticated
+invocation (`allUsers` with `roles/run.invoker`) and ingress `all`. Do not
+reintroduce IAM-protected invocation or a required local proxy.
+
+Application-level network filtering, not Cloud Run IAM, gates paid TypeSafe
+calls. Pages remain readable for denied visitors. Do not change that distinction
+when adjusting deployment or DNS.
+
+Keep shell commands on single lines in user-facing instructions: multiline
+backslash continuations have caused copy/paste problems.
+
+To rebuild an existing service while retaining its current Secret Manager
+binding and runtime settings:
+
+```bash
+gcloud run deploy jev-lab --source=. --project=pdx-cs-ai112 --region=us-central1 --allow-unauthenticated --ingress=all
+```
+
+Run this from the repository directory. A Git push alone does not redeploy the
+service. If gcloud reports `invalid_grant`, the user must refresh authentication
+with `gcloud auth login` in their terminal before retrying; do not claim a failed
+command changed the service.
+
+Inspect custom-domain DNS requirements and certificate readiness with:
+
+```bash
+gcloud beta run domain-mappings describe --domain=jev.oregonctf.org --project=pdx-cs-ai112 --region=us-central1 --format="yaml(status.resourceRecords,status.conditions)"
+```
+
+Cloud Run domain mappings are Preview, supported in `us-central1`, and issue
+Google-managed HTTPS certificates. Compare the returned `resourceRecords` with
+authoritative DNS and public resolvers before changing records. A generic
+"You must configure your DNS records" message can persist while certificate
+issuance is pending even when the CNAME is correct. Check `DomainRoutable`,
+`CertificateProvisioned`, and `Ready` separately. Provisioning typically takes
+about 15 minutes but can take up to 24 hours; do not delete/recreate a correct
+mapping just to restart issuance.
+
+Do not claim the custom domain is ready until HTTPS and certificate status
+have been checked. After domain or ingress changes, verify that the displayed
+client IP and allowed/denied API behavior still match the actual visitor.
+
 ## Preserve learning and safety behavior
 
 - Only explicit Run submissions call Jev; editing input, loading examples, and
@@ -102,10 +156,9 @@ deploying. A new Python import must also be copied into the runtime image.
   Noul returns a probability without a separate confidence field.
 - Automation thresholds act on returned probabilities locally. They simulate
   routing; they never execute real customer actions.
-- Retain exact origin checking. Cloud Run's trusted forwarding headers restore
-  HTTPS; `JEV_PROXY_ORIGIN` permits one explicitly configured browser origin for
-  an optional authenticated local proxy (not configured by default).
-  Neither mechanism is a replacement for IAM or application authentication.
+- Retain exact same-origin checking for direct Cloud Run and custom-domain
+  requests. The app restores HTTPS using Cloud Run's forwarding headers.
+  Do not add a localhost browser-origin exception as a deployment requirement.
 - Keep Uvicorn's proxy rewriting disabled (`--no-proxy-headers`). Local access
   checks the socket peer, ignoring forwarded headers. Direct Cloud Run ingress
   (`K_SERVICE` set by the platform) uses the rightmost appended forwarded IP,
