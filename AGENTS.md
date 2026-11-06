@@ -66,14 +66,16 @@ for container smoke checks without spending credits. Also verify a custom
   The runtime account is service-specific and gets Secret Accessor on just the
   selected secret. Keep this least-privilege boundary.
 - `app.json` runs `prepare` before service creation and `attach` afterward.
-  The initial IAM-protected revision has no API key until attachment finishes.
+  The initial revision has no API key until attachment finishes.
   The CLI `deploy` path binds the secret in the initial deployment.
 - The deploy button needs a published public repository; don't invent a Git
   remote or claim the button was deployed merely because local tests pass.
 - Actual deployment changes cloud resources and can incur costs. Use the
   project, region, service, and secret explicitly chosen by the user.
-- Deployment defaults require Cloud Run IAM authentication. Do not silently
-  make the service public. Capacity limits are not API spending quotas.
+- Deployment is intentionally public for direct browser access at the Cloud Run
+  URL, as requested by the user. Both deployment paths must enable unauthenticated
+  invocation. Warn that visitors can use the paid key; capacity limits are not
+  API spending quotas.
 
 If adding runtime files, update the Dockerfile and both build-context
 allowlists. `gcloud meta list-files-for-upload` checks the source upload without
@@ -97,5 +99,5 @@ deploying. A new Python import must also be copied into the runtime image.
   routing; they never execute real customer actions.
 - Retain exact origin checking. Cloud Run's trusted forwarding headers restore
   HTTPS; `JEV_PROXY_ORIGIN` permits one explicitly configured browser origin for
-  the authenticated local proxy (default deployment: `http://127.0.0.1:8080`).
+  an optional authenticated local proxy (not configured by default).
   Neither mechanism is a replacement for IAM or application authentication.

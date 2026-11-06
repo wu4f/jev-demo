@@ -56,7 +56,7 @@ def runtime_account():
     return f"jev-{suffix}@test-project.iam.gserviceaccount.com"
 
 
-def test_deploy_uses_secret_reference_and_private_service(cloud_cli):
+def test_deploy_uses_secret_reference_and_public_service(cloud_cli):
     result = run_script("deploy")
     assert result.returncode == 0, result.stderr
     commands = calls(cloud_cli)
@@ -69,7 +69,9 @@ def test_deploy_uses_secret_reference_and_private_service(cloud_cli):
     assert deploy[:3] == ["run", "deploy", "jev-lab"]
     assert "--update-secrets=TYPESAFE_API_KEY=typesafe-api-key:3" in deploy
     assert f"--service-account={runtime_account()}" in deploy
-    assert "--no-allow-unauthenticated" in deploy
+    assert "--allow-unauthenticated" in deploy
+    assert "--ingress=all" in deploy
+    assert not any("JEV_PROXY_ORIGIN=" in flag for flag in deploy)
     assert "--max-instances=2" in deploy
     assert "--concurrency=8" in deploy
     assert not any(command[:3] == ["secrets", "versions", "access"] for command in commands)
@@ -78,11 +80,14 @@ def test_deploy_uses_secret_reference_and_private_service(cloud_cli):
 def test_button_attach_sets_runtime_identity_and_secret(cloud_cli):
     result = run_script("attach")
     assert result.returncode == 0, result.stderr
-    (command,) = calls(cloud_cli)
+    command, public_access = calls(cloud_cli)
     assert command[:4] == ["run", "services", "update", "jev-lab"]
     assert "--update-secrets=TYPESAFE_API_KEY=typesafe-api-key:3" in command
     assert f"--service-account={runtime_account()}" in command
-    assert not any("--allow-unauthenticated" == flag for flag in command)
+    assert "--ingress=all" in command
+    assert public_access[:4] == ["run", "services", "add-iam-policy-binding", "jev-lab"]
+    assert "--member=allUsers" in public_access
+    assert "--role=roles/run.invoker" in public_access
 
 
 @pytest.mark.parametrize("version", ["latest", "0", "-1", "1,OTHER=value"])

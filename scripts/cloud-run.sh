@@ -40,7 +40,6 @@ account_id="jev-$(printf '%s' "$K_SERVICE" | sha256sum | cut -c1-20)"
 account="${account_id}@${GOOGLE_CLOUD_PROJECT}.iam.gserviceaccount.com"
 secret_binding="TYPESAFE_API_KEY=${TYPESAFE_SECRET}:${TYPESAFE_SECRET_VERSION}"
 model="${TYPESAFE_DEFAULT_MODEL:-jev-latest}"
-proxy_origin="${JEV_PROXY_ORIGIN:-http://127.0.0.1:8080}"
 
 prepare() {
   gcloud services enable \
@@ -72,7 +71,10 @@ attach() {
   gcloud run services update "$K_SERVICE" \
     --project="$GOOGLE_CLOUD_PROJECT" --region="$GOOGLE_CLOUD_REGION" \
     --service-account="$account" --update-secrets="$secret_binding" \
-    --max-instances=2 --concurrency=8 --timeout=60 --quiet
+    --ingress=all --max-instances=2 --concurrency=8 --timeout=60 --quiet
+  gcloud run services add-iam-policy-binding "$K_SERVICE" \
+    --project="$GOOGLE_CLOUD_PROJECT" --region="$GOOGLE_CLOUD_REGION" \
+    --member=allUsers --role=roles/run.invoker --quiet >/dev/null
 }
 
 deploy() {
@@ -80,8 +82,8 @@ deploy() {
   gcloud run deploy "$K_SERVICE" --source="$root" \
     --project="$GOOGLE_CLOUD_PROJECT" --region="$GOOGLE_CLOUD_REGION" \
     --service-account="$account" --update-secrets="$secret_binding" \
-    --set-env-vars="TYPESAFE_DEFAULT_MODEL=${model},JEV_PROXY_ORIGIN=${proxy_origin}" \
-    --no-allow-unauthenticated --port=8080 --memory=512Mi --cpu=1 \
+    --set-env-vars="TYPESAFE_DEFAULT_MODEL=${model}" \
+    --allow-unauthenticated --ingress=all --port=8080 --memory=512Mi --cpu=1 \
     --min-instances=0 --max-instances=2 --concurrency=8 --timeout=60 --quiet
 }
 

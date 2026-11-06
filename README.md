@@ -116,11 +116,10 @@ the same project containing your secret and a region, then supply:
 | `TYPESAFE_SECRET` | `typesafe-api-key` | Existing secret name, **not the API key** |
 | `TYPESAFE_SECRET_VERSION` | `1` | Enabled, pinned numeric version; not `latest` |
 | `TYPESAFE_DEFAULT_MODEL` | `jev-latest` | Jev model or alias |
-| `JEV_PROXY_ORIGIN` | `http://127.0.0.1:8080` | Browser origin for the local authenticated proxy |
 
 `app.json` configures the build and hooks. The `precreate` hook verifies the
 secret version and prepares runtime IAM; `postcreate` attaches the secret and
-runtime identity. The initial private revision has no API key until that
+runtime identity and enables public invocation. The initial revision has no API key until that
 second step completes. Treat a failed hook as a failed deployment, not a
 configured app.
 
@@ -144,8 +143,8 @@ bash scripts/cloud-run.sh deploy
 ```
 
 This enables required APIs, prepares the account and secret access, uploads
-the allowlisted source, builds the Dockerfile, and deploys a service requiring
-Cloud Run IAM authentication. No local `.env` values are uploaded or read by
+the allowlisted source, builds the Dockerfile, and deploys a publicly accessible
+service. No local `.env` values are uploaded or read by
 the deployment script. Runtime defaults are 512 MiB, one CPU, zero minimum
 instances, at most two instances per revision, concurrency eight, and a
 60-second request timeout.
@@ -155,29 +154,35 @@ of this setup. Your identity and project policy determine deployment access;
 resolve any IAM/build permission errors rather than granting broad runtime
 permissions.
 
-### Open the authenticated app
+### Open the app directly
 
-An IAM-protected service URL will not open directly in an ordinary browser.
-With a signed-in identity that has `roles/run.invoker`, run:
+Open the HTTPS service URL printed by Cloud Run in an ordinary browser.
+No login, local proxy, or identity token is required. Deployments allow
+unauthenticated invocation (`allUsers` with `roles/run.invoker`).
+
+**Anyone who can reach the URL can submit experiments using your paid API
+key.** The key stays server-side, but this app has no per-user quota or hard
+spending cap. Instance limits do not cap TypeSafe charges.
+
+If you already deployed the earlier private version, enable direct access
+without rebuilding (replace the project, region, and service as needed):
 
 ```bash
-gcloud run services proxy jev-lab \
+gcloud run services update jev-lab \
   --project="$GOOGLE_CLOUD_PROJECT" \
   --region="$GOOGLE_CLOUD_REGION" \
-  --port=8080
+  --ingress=all
+gcloud run services add-iam-policy-binding jev-lab \
+  --project="$GOOGLE_CLOUD_PROJECT" \
+  --region="$GOOGLE_CLOUD_REGION" \
+  --member=allUsers \
+  --role=roles/run.invoker
 ```
 
-Open **http://127.0.0.1:8080** (use that exact hostname and port). Both deployment
-paths configure this explicit proxy origin. Static assets use relative paths
-so requests stay on the authenticated proxy. If you change the proxy's port
-or hostname, update `JEV_PROXY_ORIGIN` on the service to match. It adds one
-exact allowed browser origin; it does not disable origin checking or IAM.
-
-For student access, prefer an authenticated gateway such as IAP. If you
-deliberately want a public service, you can grant `allUsers` the
-`roles/run.invoker` role on the service, subject to your organization's policy.
-That makes **all API calls public too**; add access controls and durable quotas
-before doing so. An obscure URL and the origin check are not authentication.
+Organization policies may prohibit granting access to `allUsers`. If the
+command is rejected, ask your project administrator about permitted public
+access; don't treat a failed IAM update as a successful public deployment.
+Same-origin checks remain enabled for direct HTTPS browser requests.
 
 ### Rotate the API key
 
@@ -216,12 +221,12 @@ shown explicitly without exposing upstream bodies or credentials.
 
 ## Cost and data safeguards
 
-This version is for trusted **development testing**, not a public paid API proxy.
+This is a teaching demo, not a production service with spending controls.
 The local launch commands bind to all interfaces for access from another machine.
 There is no authentication, durable rate limit, or shared spending quota:
 anyone who can reach port 8000 can make calls using your paid API key.
 Restrict development network access to trusted machines. Cloud Run deployments
-default to IAM authentication. Instance/concurrency limits constrain capacity,
+are public for direct browser access. Instance/concurrency limits constrain capacity,
 **not API spending**; add durable per-user quotas and a shared usage allowance
 before opening the app to a class. Cloud billing budgets are alerts, not hard
 spending caps, and TypeSafe API charges are separate.

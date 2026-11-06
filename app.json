@@ -15,16 +15,10 @@
       "description": "Jev model or alias",
       "value": "jev-latest",
       "order": 3
-    },
-    "JEV_PROXY_ORIGIN": {
-      "description": "Browser origin for the authenticated gcloud proxy",
-      "value": "http://127.0.0.1:8080",
-      "required": false,
-      "order": 4
     }
   },
   "options": {
-    "allow-unauthenticated": false,
+    "allow-unauthenticated": true,
     "memory": "512Mi",
     "cpu": "1",
     "port": 8080,
