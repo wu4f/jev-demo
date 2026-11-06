@@ -77,6 +77,48 @@ def test_demo_page_and_real_sdk_serialization(client, sdk, slug):
     )
 
 
+def test_trolley_replaces_removed_pages_in_navigation(client, sdk):
+    home = client.get("/")
+    page = client.get("/demos/trolley")
+    for response in (home, page):
+        assert 'href="/demos/trolley"' in response.text
+        assert "Explore the trolley problem" in response.text
+        assert 'href="/demos/announcements"' not in response.text
+        assert 'href="/demos/nothing-fits"' not in response.text
+    assert "not which action is morally correct" in page.text
+    assert "no real action is taken" in page.text
+    for slug in ("announcements", "nothing-fits"):
+        assert client.get(f"/demos/{slug}").status_code == 404
+        assert client.post(f"/api/demos/{slug}/run", json={"text": "Test"}).status_code == 404
+    sdk.system_one.assert_not_called()
+
+
+@pytest.mark.parametrize("choice", ["pull_the_lever", "do_nothing"])
+def test_trolley_returns_either_choice_with_probabilities(client, sdk, choice):
+    sdk.system_one.return_value = SystemOneResponse(
+        model="jev-test",
+        answers={
+            "action": {
+                "type": "choice",
+                "choice": choice,
+                "confidence": 0.6,
+                "probabilities": {
+                    option: 0.8 if option == choice else 0.2
+                    for option in ("pull_the_lever", "do_nothing")
+                },
+            }
+        },
+        usage={},
+    )
+    text = DEMOS["trolley"].examples[0].text
+    result = client.post("/api/demos/trolley/run", json={"text": text})
+    assert result.status_code == 200
+    answer = result.json()["response"]["answers"]["action"]
+    assert answer["choice"] == choice
+    assert answer["probabilities"][choice] == 0.8
+    sdk.system_one.assert_awaited_once_with(state=text, questions=DEMOS["trolley"].questions)
+
+
 @pytest.mark.parametrize("text", ["", "  \n ", "x" * 6001])
 def test_invalid_input_never_calls_api(client, sdk, text):
     assert client.post("/api/demos/support/run", json={"text": text}).status_code == 422

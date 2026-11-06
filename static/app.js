@@ -83,16 +83,6 @@ function renderAnswers(run, target) {
     }
     target.append(card);
   }
-  if (config.slug === "nothing-fits") {
-    const probability = run.response.answers.fits.noul;
-    const explanation = probability < 0.3
-      ? "No suitable category: ignore the forced Choice and request clarification."
-      : probability < 0.7
-        ? "Uncertain fit: ask a person to review before using the Choice."
-        : "A category appears to fit; inspect the Choice distribution before acting.";
-    target.append(node("p", explanation, "decision"));
-    target.append(node("p", "Demo policy: below 30% = no fit; 30% to under 70% = review; 70% or above = inspect Choice. These cutoffs are illustrative.", "meta"));
-  }
 }
 
 function updatePolicy() {

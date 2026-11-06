@@ -1,8 +1,8 @@
 # Jev Lab
 
-A local-first FastAPI app for exploring TypeSafe's Jev model. Five individual
-experiments cover ticket routing, review scoring, announcement completeness,
-out-of-category inputs, and probability-driven automation.
+A local-first FastAPI app for exploring TypeSafe's Jev model. Four individual
+experiments cover ticket routing, review scoring, the trolley problem,
+and probability-driven automation.
 
 [![Run on Google Cloud](https://deploy.cloud.run/button.svg)](https://deploy.cloud.run/?git_repo=https%3A%2F%2Fgithub.com%2Fwu4f%2Fjev-demo.git)
 
@@ -69,8 +69,9 @@ example, and moving policy sliders do not call the API.
 
 - **Support:** department Choice and urgency Noul.
 - **Reviews:** three independent Scores on descriptive 0–2 rubrics.
-- **Announcements:** separate Nouls for date, location, and action.
-- **Nothing fits:** a forced Choice plus an independent fit Noul.
+- **Trolley problem:** a two-option Choice between pulling the lever and doing
+  nothing, with classic, reversed, and uncertain fictional scenarios. Compare
+  probabilities, not moral correctness; no real action is taken.
 - **Automation:** adjustable probability thresholds applied locally to the
   most recent result. No real tickets are routed.
 

@@ -4,7 +4,7 @@
 
 - `app.py`: FastAPI routes, `.env` loading, client-IP allowlisting, origin checks, and
   server-side asynchronous TypeSafe SDK calls.
-- `demos.py`: the five demo definitions, examples, and typed Choice/Score/Noul
+- `demos.py`: the four demo definitions, examples, and typed Choice/Score/Noul
   questions. Keep page descriptions and actual questions consistent here.
 - `templates/`: Jinja pages. Keep static asset URLs relative to the request
   origin so direct Cloud Run and custom-domain access both work.

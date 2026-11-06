@@ -111,57 +111,59 @@ DEMOS = {
             ),
         ),
         Demo(
-            slug="announcements",
-            title="Check an announcement",
-            primitive="Noul",
-            description="Check whether a message gives readers the details they need.",
-            lesson="Ask for each detail independently. A value near 0.5 signals uncertainty, "
-            "not a confident yes or no. This is a completeness check, not fact verification.",
-            experiment="Replace an exact room with 'the usual place'. "
-            "Is the location still clearly specified?",
+            slug="trolley",
+            title="Explore the trolley problem",
+            primitive="Choice",
+            description="See which action Jev favors in a fictional moral dilemma: "
+            "pull the lever or do nothing.",
+            lesson="Choice compares two preset actions. Its probabilities show how Jev weighs "
+            "the options, not which action is morally correct or what it would actually do. "
+            "This is a thought experiment; no real action is taken.",
+            experiment="Change the number of people on each track or make the outcome uncertain. "
+            "Run again and compare the distributions. Does Jev's preferred action change?",
             questions={
-                "has_date": Noul(
-                    instructions="The announcement explicitly specifies a calendar date for the event."
-                ),
-                "has_location": Noul(
-                    instructions="The announcement explicitly specifies a physical location "
-                    "or online meeting address for the event."
-                ),
-                "has_action": Noul(
-                    instructions="The announcement explicitly tells readers what action to take."
+                "action": Choice(
+                    instructions="In this fictional trolley problem, which of the two actions "
+                    "would you choose? Weigh the consequences and ethical tradeoffs described "
+                    "in the scenario. Treat these as the only available actions; do not assume "
+                    "an unmentioned rescue option.",
+                    criteria={
+                        "pull_the_lever": "Pull the lever to divert the trolley onto the side track.",
+                        "do_nothing": "Do not pull the lever; leave the trolley on its current track.",
+                    },
                 ),
             },
             examples=(
                 Example(
-                    "Complete",
-                    "Join our robotics workshop on March 12, 2027 at 3 pm in Engineering Room 204. "
-                    "Register using the course portal before March 10.",
+                    "Classic dilemma",
+                    "In a fictional thought experiment, a runaway trolley is heading toward "
+                    "five people on the main track. You can pull a lever to divert it onto a "
+                    "side track where one person stands. Nobody can leave the tracks. "
+                    "There is no way to stop the trolley or warn anyone in time. "
+                    "Pulling the lever means one person dies; doing nothing means five die. "
+                    "Your only choices are to pull the lever or do nothing.",
                 ),
                 Example(
-                    "Ambiguous",
-                    "The workshop is happening soon at the usual place. You know what to do!",
+                    "Reverse the numbers",
+                    "In a fictional thought experiment, a runaway trolley is heading toward "
+                    "one person on the main track. You can pull a lever to divert it onto a "
+                    "side track where five people stand. Nobody can leave the tracks. "
+                    "There is no way to stop the trolley or warn anyone in time. "
+                    "Pulling the lever means five people die; doing nothing means one dies. "
+                    "Your only choices are to pull the lever or do nothing.",
                 ),
-                Example("Missing details", "We are planning a robotics workshop. More details soon."),
+                Example(
+                    "Uncertain outcome",
+                    "In a fictional thought experiment, a runaway trolley is heading toward "
+                    "five people on the main track. You can pull a lever to divert it onto a "
+                    "side track where one person stands. Nobody can leave the tracks. "
+                    "There is no way to stop the trolley or warn anyone in time. "
+                    "The lever has a 20% chance of diverting the trolley, in which case one "
+                    "person dies. Otherwise it stays on the main track and five people die, "
+                    "just as they would if you did nothing. "
+                    "Your only choices are to pull the lever or do nothing.",
+                ),
             ),
-        ),
-        Demo(
-            slug="nothing-fits",
-            title="Know when nothing fits",
-            primitive="Choice + companion Noul",
-            description="See why picking the best available category can still be the wrong action.",
-            lesson="Choice must select an available option. An independent companion Noul checks "
-            "whether any of those options actually applies.",
-            experiment="Ask for a recipe. Watch the Choice answer alongside the fit probability.",
-            questions={
-                "department": DEPARTMENT,
-                "fits": Noul(
-                    instructions="The message is a customer support request about at least one of: "
-                    "billing (charges, invoices, refunds, subscription payments); technical support "
-                    "(software bugs, outages, login issues, integrations); or sales "
-                    "(pricing, purchasing, plan comparisons)."
-                ),
-            },
-            examples=SUPPORT_EXAMPLES,
         ),
         Demo(
             slug="automation",
