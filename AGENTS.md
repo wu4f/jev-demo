@@ -2,7 +2,7 @@
 
 ## App structure
 
-- `app.py`: FastAPI routes, `.env` loading, input validation, origin checks, and
+- `app.py`: FastAPI routes, `.env` loading, client-IP allowlisting, origin checks, and
   server-side asynchronous TypeSafe SDK calls.
 - `demos.py`: the five demo definitions, examples, and typed Choice/Score/Noul
   questions. Keep page descriptions and actual questions consistent here.
@@ -25,12 +25,16 @@ Use Python 3.10+ locally; the container uses Python 3.12.
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements-dev.txt
-.venv/bin/python -m uvicorn app:app --host 0.0.0.0 --port 8000
+.venv/bin/python -m uvicorn app:app --host 0.0.0.0 --port 8000 --no-proxy-headers
 ```
 
 Port 8000 intentionally supports access from another machine. Check for an
 existing server before starting one; do not stop another session's process.
 Local access is unauthenticated, so restrict network reachability.
+The default allowed network is `131.252.0.0/16`. Pages remain public and show
+the detected IP in green/red; TypeSafe calls outside the network return 403.
+For loopback-only API testing, explicitly set `JEV_ALLOWED_NETWORK=127.0.0.0/8`
+for that process. Do not weaken the deployment's default to make a local test pass.
 
 ```bash
 .venv/bin/python -m pytest -q
@@ -50,7 +54,8 @@ docker run --rm -p 8001:8080 jev-lab
 ```
 
 Without an injected key, `/health`, `/`, and all demo pages must work, while
-evaluation requests return an explicit configuration error. Use these routes
+evaluation requests return 403 outside the network or an explicit configuration
+error inside it. Use these routes
 for container smoke checks without spending credits. Also verify a custom
 `PORT` when modifying the container startup command.
 
@@ -74,8 +79,8 @@ for container smoke checks without spending credits. Also verify a custom
   project, region, service, and secret explicitly chosen by the user.
 - Deployment is intentionally public for direct browser access at the Cloud Run
   URL, as requested by the user. Both deployment paths must enable unauthenticated
-  invocation. Warn that visitors can use the paid key; capacity limits are not
-  API spending quotas.
+  invocation. Only visitors in the app's allowed network can use the paid key;
+  capacity limits are not API spending quotas.
 
 If adding runtime files, update the Dockerfile and both build-context
 allowlists. `gcloud meta list-files-for-upload` checks the source upload without
@@ -101,3 +106,11 @@ deploying. A new Python import must also be copied into the runtime image.
   HTTPS; `JEV_PROXY_ORIGIN` permits one explicitly configured browser origin for
   an optional authenticated local proxy (not configured by default).
   Neither mechanism is a replacement for IAM or application authentication.
+- Keep Uvicorn's proxy rewriting disabled (`--no-proxy-headers`). Local access
+  checks the socket peer, ignoring forwarded headers. Direct Cloud Run ingress
+  (`K_SERVICE` set by the platform) uses the rightmost appended forwarded IP,
+  not a caller-supplied prefix. Missing/invalid addresses deny TypeSafe access.
+  Reassess this trust model before adding any other proxy or load balancer.
+- Use the same parsed IP/access result for the status banner and API enforcement.
+  Never replace the server check with a disabled button. Keep pages readable
+  when denied and their IP-specific responses private/no-store.

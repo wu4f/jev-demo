@@ -13,7 +13,19 @@
     <span class="header-note">Small questions. Useful decisions.</span>
     <a href="https://docs.typesafe.ai/introduction" target="_blank" rel="noopener noreferrer">TypeSafe docs ↗</a>
   </header>
-  <main>{% block content %}{% endblock %}</main>
+  <main>
+    <aside class="network-status {% if network_access.allowed %}network-allowed{% else %}network-denied{% endif %}" aria-label="Network access status">
+      <span class="network-dot" aria-hidden="true"></span>
+      <div>
+        <strong>{% if network_access.allowed %}TypeSafe access allowed{% else %}TypeSafe access denied{% endif %}</strong>
+        <span>Your IP: <code>{{ network_access.client_ip or 'Unknown' }}</code> · Allowed network: <code>{{ network_access.network }}</code></span>
+        {% if not network_access.allowed %}
+        <span>You can explore the pages, but running Jev requires a connection from the allowed network or a VPN that exits through it.</span>
+        {% endif %}
+      </div>
+    </aside>
+    {% block content %}{% endblock %}
+  </main>
   <footer>
     A learning playground, not a production decision system.
     Inputs are sent to TypeSafe when you click Run Jev. Use fictional data, not personal information.

@@ -1,6 +1,8 @@
 import asyncio
 import logging
 import os
+from dataclasses import dataclass
+from ipaddress import IPv6Address, ip_address, ip_network
 from pathlib import Path
 from time import perf_counter
 
@@ -23,9 +25,50 @@ from demos import DEMOS
 ROOT = Path(__file__).resolve().parent
 load_dotenv(ROOT / ".env")
 logger = logging.getLogger(__name__)
+ALLOWED_NETWORK = ip_network(os.getenv("JEV_ALLOWED_NETWORK", "131.252.0.0/16"))
 app = FastAPI(title="Jev Lab")
 app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
-templates = Jinja2Templates(directory=ROOT / "templates")
+
+
+@dataclass(frozen=True)
+class NetworkAccess:
+    client_ip: str | None
+    allowed: bool
+    network: str
+
+
+@app.middleware("http")
+async def identify_client(request: Request, call_next):
+    raw_ip = request.client.host if request.client else None
+    if os.getenv("K_SERVICE"):
+        # Direct Cloud Run ingress appends the connecting client after user-supplied entries.
+        # Never authorize using Uvicorn's wildcard-trusted, leftmost forwarded address.
+        forwarded = request.headers.getlist("x-forwarded-for")
+        raw_ip = forwarded[-1].rsplit(",", 1)[-1].strip() if forwarded else None
+        if request.headers.get("x-forwarded-proto") == "https":
+            request.scope["scheme"] = "https"
+    try:
+        address = ip_address(raw_ip) if raw_ip else None
+    except ValueError:
+        address = None
+    if isinstance(address, IPv6Address) and address.ipv4_mapped:
+        address = address.ipv4_mapped
+    request.state.network_access = NetworkAccess(
+        client_ip=str(address) if address else None,
+        allowed=address is not None and address in ALLOWED_NETWORK,
+        network=str(ALLOWED_NETWORK),
+    )
+    response = await call_next(request)
+    if not request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "private, no-store"
+    return response
+
+
+def access_context(request: Request) -> dict[str, NetworkAccess]:
+    return {"network_access": request.state.network_access}
+
+
+templates = Jinja2Templates(directory=ROOT / "templates", context_processors=[access_context])
 
 
 class RunInput(BaseModel):
@@ -68,6 +111,7 @@ async def demo_page(request: Request, slug: str):
             "config": {
                 "slug": slug,
                 "model": current_model(),
+                "network_allowed": request.state.network_access.allowed,
                 "questions": {
                     name: question.model_dump(mode="json", exclude_none=True)
                     for name, question in demo.questions.items()
@@ -87,6 +131,13 @@ async def health():
 async def run_demo(request: Request, slug: str, payload: RunInput):
     if slug not in DEMOS:
         raise HTTPException(404, "Demo not found.")
+    access = request.state.network_access
+    if not access.allowed:
+        raise HTTPException(
+            403,
+            f"TypeSafe access denied for IP {access.client_ip or 'unknown'}. "
+            f"Connect from {access.network} or a VPN that exits through that network.",
+        )
     # Same-origin browser calls work locally and behind Cloud Run's TLS proxy.
     origin = request.headers.get("origin")
     allowed_origins = {str(request.base_url).rstrip("/")}

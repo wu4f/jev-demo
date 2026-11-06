@@ -24,10 +24,11 @@ Create `.env` beside `app.py` (or use `.env.example` as a starting point):
 ```dotenv
 TYPESAFE_API_KEY=your-key-here
 TYPESAFE_DEFAULT_MODEL=jev-latest
+JEV_ALLOWED_NETWORK=131.252.0.0/16
 ```
 
 ```bash
-.venv/bin/python -m uvicorn app:app --host 0.0.0.0 --port 8000
+.venv/bin/python -m uvicorn app:app --host 0.0.0.0 --port 8000 --no-proxy-headers
 ```
 
 Open <http://127.0.0.1:8000> on this machine, or
@@ -38,6 +39,26 @@ Restart the server after changing `.env`.
 Existing process environment variables take precedence over `.env`.
 For loopback-only access instead, use `--host 127.0.0.1` and forward port 8000
 over SSH.
+
+Every page shows your detected IP and a green (allowed) or red (denied)
+network indicator. Pages and examples remain accessible from any network,
+but **only clients in `131.252.0.0/16` can call TypeSafe by default**.
+The server returns HTTP 403 before creating the SDK client for other addresses,
+even if someone manually enables the Run button or calls the API directly.
+IPv6 addresses outside the IPv4 range are denied; IPv4-mapped IPv6 addresses
+are checked as IPv4. Unknown or invalid client addresses are also denied.
+
+Loopback is outside that default range. For local-only API testing, explicitly
+override the single CIDR for that process:
+
+```bash
+JEV_ALLOWED_NETWORK=127.0.0.0/8 .venv/bin/python -m uvicorn app:app \
+  --host 0.0.0.0 --port 8000 --no-proxy-headers
+```
+
+For testing from another machine, use a CIDR containing its actual source
+address instead. Restart after changing `JEV_ALLOWED_NETWORK`; invalid CIDRs
+fail at startup. Do not copy a development override into the Cloud Run service.
 
 No frontend build, container, Google account, or Secret Manager setup is needed.
 Only clicking **Run Jev** makes a paid API request. Each run batches the page's
@@ -78,8 +99,33 @@ The image uses Python 3.12, runs as UID/GID 10001, listens on `0.0.0.0`, and
 honors Cloud Run's `PORT` (8080 by default). `.dockerignore` and `.gcloudignore`
 are allowlists: `.env`, Git metadata, virtual environments, and tests are
 excluded from both build contexts. Docker runs only the application, not
-development tooling. TLS forwarding headers are trusted in the container
-because Cloud Run terminates HTTPS; use it behind a trusted ingress.
+development tooling. Uvicorn proxy-header rewriting is disabled so the
+application can apply its own client-IP trust rules.
+
+### Client IP trust boundary
+
+Locally (including plain Docker), the app checks the socket peer and ignores
+forwarding headers. Always use `--no-proxy-headers`; otherwise Uvicorn can
+replace that address before the app sees it.
+
+When Cloud Run sets `K_SERVICE`, the app uses the **rightmost** forwarded
+address appended by direct Cloud Run ingress, never the untrusted leftmost
+value supplied by a caller. Duplicate header fields are processed in order;
+a missing or invalid final address fails closed. HTTPS forwarding is handled
+in the app for same-origin validation. Don't manually set `K_SERVICE` on an
+internet-exposed local container.
+
+This trust model targets the direct Cloud Run endpoint. If you add another
+load balancer, CDN, or reverse proxy, review and test its forwarding chain
+before relying on the filter; do not simply select an earlier header entry.
+After deploying, check the displayed IP from campus and off-campus, including
+a request with a forged `X-Forwarded-For: 131.252.1.1`. The forged prefix must
+not change the detected connecting IP or grant access.
+
+This is an application-level filter, not a network firewall. Rejected requests
+still reach the container and can incur Cloud Run charges, but do not call
+TypeSafe. Page responses use `Cache-Control: private, no-store` so one visitor's
+IP/access indicator is not cached for another. Reload after connecting a VPN.
 
 ## Deploy to Cloud Run
 
@@ -160,9 +206,12 @@ Open the HTTPS service URL printed by Cloud Run in an ordinary browser.
 No login, local proxy, or identity token is required. Deployments allow
 unauthenticated invocation (`allUsers` with `roles/run.invoker`).
 
-**Anyone who can reach the URL can submit experiments using your paid API
-key.** The key stays server-side, but this app has no per-user quota or hard
-spending cap. Instance limits do not cap TypeSafe charges.
+Anyone can read the pages, but **only clients in `131.252.0.0/16` can submit
+experiments using your paid API key** by default. Off-campus clients need a
+VPN whose internet traffic exits through that range. The key stays server-side,
+but this app has no per-user quota or hard spending cap. Instance limits do
+not cap TypeSafe charges. Rebuild and redeploy to apply this Python filter to
+an existing service; changing IAM alone does not install it.
 
 If you already deployed the earlier private version, enable direct access
 without rebuilding (replace the project, region, and service as needed):
@@ -223,10 +272,11 @@ shown explicitly without exposing upstream bodies or credentials.
 
 This is a teaching demo, not a production service with spending controls.
 The local launch commands bind to all interfaces for access from another machine.
-There is no authentication, durable rate limit, or shared spending quota:
-anyone who can reach port 8000 can make calls using your paid API key.
+There is no user authentication, durable rate limit, or shared spending quota:
+anyone in the configured allowed network can make calls using your paid API key.
 Restrict development network access to trusted machines. Cloud Run deployments
-are public for direct browser access. Instance/concurrency limits constrain capacity,
+are public for direct browser access, with TypeSafe calls restricted by the
+application's CIDR check. Instance/concurrency limits constrain capacity,
 **not API spending**; add durable per-user quotas and a shared usage allowance
 before opening the app to a class. Cloud billing budgets are alerts, not hard
 spending caps, and TypeSafe API charges are separate.

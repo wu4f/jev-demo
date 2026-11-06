@@ -32,7 +32,7 @@
       <label for="state">Text to evaluate</label>
       <textarea id="state" name="text" rows="9" maxlength="6000" required>{{ demo.examples[0].text }}</textarea>
       <div class="input-meta"><span id="char-count"></span><span>No calls while typing</span></div>
-      <button class="primary" id="run" type="submit">Run Jev <span aria-hidden="true">→</span></button>
+      <button class="primary" id="run" type="submit" {% if not network_access.allowed %}disabled{% endif %}>Run Jev <span aria-hidden="true">→</span></button>
     </form>
     <p id="error" class="error" role="alert" hidden></p>
     <details class="questions">

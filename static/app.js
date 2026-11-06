@@ -27,7 +27,9 @@ function isStale() {
 function updateInput() {
   byId("char-count").textContent = `${input.value.length} / 6000 characters`;
   if (!running) {
-    byId("status").textContent = latest
+    byId("status").textContent = !config.network_allowed
+      ? "TypeSafe access denied for your network. You can edit examples, but cannot run Jev."
+      : latest
       ? isStale()
         ? "Out of date: these results belong to the input shown below. Run again to evaluate your edits."
         : "Live results from Jev. Probabilities are estimates, not guarantees."
@@ -123,7 +125,7 @@ for (const id of ["route-threshold", "urgent-threshold"]) {
 
 byId("run-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (running) return;
+  if (running || !config.network_allowed) return;
   if (!input.value.trim()) {
     byId("error").textContent = "Enter some text to evaluate.";
     byId("error").hidden = false;
@@ -162,7 +164,7 @@ byId("run-form").addEventListener("submit", async (event) => {
     byId("error").hidden = false;
   } finally {
     running = false;
-    byId("run").disabled = false;
+    byId("run").disabled = !config.network_allowed;
     byId("run").textContent = "Run Jev →";
     document.querySelector(".results-panel").setAttribute("aria-busy", "false");
     updateInput();

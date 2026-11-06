@@ -1,3 +1,4 @@
+from ipaddress import ip_network
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -8,16 +9,21 @@ from typesafe_sdk import (
     TypeSafeAPITimeoutError,
     TypeSafeError,
 )
-from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 import app as lab
 from demos import DEMOS
 
 
+@pytest.fixture(autouse=True)
+def network_config(monkeypatch):
+    monkeypatch.delenv("K_SERVICE", raising=False)
+    monkeypatch.setattr(lab, "ALLOWED_NETWORK", ip_network("131.252.0.0/16"))
+
+
 @pytest.fixture
 def client(monkeypatch):
     monkeypatch.setenv("TYPESAFE_API_KEY", "test-secret-not-for-browser")
-    with TestClient(lab.app, base_url="http://localhost") as client:
+    with TestClient(lab.app, base_url="http://localhost", client=("131.252.12.34", 1234)) as client:
         yield client
 
 
@@ -139,6 +145,7 @@ def test_cross_origin_call_rejected(client, sdk):
 
 def test_cloud_run_forwarded_https_preserves_same_origin(sdk, monkeypatch):
     monkeypatch.setenv("TYPESAFE_API_KEY", "injected-secret")
+    monkeypatch.setenv("K_SERVICE", "jev-lab")
     sdk.system_one.return_value = SystemOneResponse(
         model="jev-test",
         answers={
@@ -146,15 +153,14 @@ def test_cloud_run_forwarded_https_preserves_same_origin(sdk, monkeypatch):
         },
         usage={},
     )
-    proxy_app = ProxyHeadersMiddleware(lab.app, trusted_hosts="*")
-    with TestClient(proxy_app, base_url="http://jev-lab.example") as remote:
+    with TestClient(lab.app, base_url="http://jev-lab.example") as remote:
         result = remote.post(
             "/api/demos/support/run",
             json={"text": "My checkout is broken"},
             headers={
                 "origin": "https://jev-lab.example",
                 "x-forwarded-proto": "https",
-                "x-forwarded-for": "203.0.113.1",
+                "x-forwarded-for": "131.252.12.34",
             },
         )
     assert result.status_code == 200
@@ -191,3 +197,109 @@ def test_authenticated_local_proxy_needs_explicit_origin(client, sdk, monkeypatc
         ).status_code
         == 403
     )
+
+
+@pytest.mark.parametrize(
+    ("address", "allowed"),
+    [
+        ("131.252.0.0", True),
+        ("131.252.255.255", True),
+        ("131.251.255.255", False),
+        ("131.253.0.0", False),
+        ("127.0.0.1", False),
+        ("2001:db8::1", False),
+        ("::ffff:131.252.12.34", True),
+        ("invalid", False),
+    ],
+)
+def test_ip_status_and_api_enforcement(address, allowed, sdk, monkeypatch):
+    monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
+    with TestClient(lab.app, client=(address, 1234)) as visitor:
+        page = visitor.get("/demos/support")
+        assert page.status_code == 200
+        expected_ip = "131.252.12.34" if address.startswith("::ffff:") else address
+        if address == "invalid":
+            expected_ip = "Unknown"
+        assert f"<code>{expected_ip}</code>" in page.text
+        assert ("network-allowed" if allowed else "network-denied") in page.text
+        assert ("TypeSafe access allowed" if allowed else "TypeSafe access denied") in page.text
+        assert f'"network_allowed": {str(allowed).lower()}' in page.text
+        assert ('type="submit" disabled' in page.text) is not allowed
+        assert page.headers["cache-control"] == "private, no-store"
+        result = visitor.post("/api/demos/support/run", json={"text": "Test"})
+        # Allowed visitors reach configuration checking; denied visitors do not.
+        assert result.status_code == (503 if allowed else 403)
+        if not allowed:
+            assert "TypeSafe access denied" in result.json()["detail"]
+        assert visitor.get("/health").status_code == 200
+    lab.AsyncTypeSafeClient.assert_not_called()
+
+
+def test_local_forwarding_headers_cannot_spoof_address(sdk):
+    with TestClient(lab.app, client=("203.0.113.1", 1234)) as visitor:
+        headers = {
+            "x-forwarded-for": "131.252.12.34",
+            "x-real-ip": "131.252.12.34",
+            "forwarded": "for=131.252.12.34",
+        }
+        page = visitor.get("/", headers=headers)
+        assert "203.0.113.1" in page.text
+        assert "network-denied" in page.text
+        assert (
+            visitor.post(
+                "/api/demos/support/run", json={"text": "Test"}, headers=headers
+            ).status_code
+            == 403
+        )
+    lab.AsyncTypeSafeClient.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("forwarded_headers", "expected_ip"),
+    [
+        ([("x-forwarded-for", "131.252.12.34, 203.0.113.1")], "203.0.113.1"),
+        (
+            [("x-forwarded-for", "131.252.12.34"), ("x-forwarded-for", "203.0.113.1")],
+            "203.0.113.1",
+        ),
+        ([("x-forwarded-for", "131.252.12.34, invalid")], "Unknown"),
+        ([("x-forwarded-for", "131.252.12.34,")], "Unknown"),
+        ([], "Unknown"),
+    ],
+)
+def test_cloud_run_ignores_spoofed_prefix_and_fails_closed(
+    sdk, monkeypatch, forwarded_headers, expected_ip
+):
+    monkeypatch.setenv("K_SERVICE", "jev-lab")
+    with TestClient(lab.app, client=("131.252.99.99", 1234)) as visitor:
+        page = visitor.get("/", headers=forwarded_headers)
+        assert f"<code>{expected_ip}</code>" in page.text
+        assert "network-denied" in page.text
+        result = visitor.post(
+            "/api/demos/support/run", json={"text": "Test"}, headers=forwarded_headers
+        )
+        assert result.status_code == 403
+    lab.AsyncTypeSafeClient.assert_not_called()
+
+
+def test_local_network_can_be_configured_for_development(sdk, monkeypatch):
+    monkeypatch.setattr(lab, "ALLOWED_NETWORK", ip_network("127.0.0.0/8"))
+    with TestClient(lab.app, client=("127.0.0.1", 1234)) as visitor:
+        page = visitor.get("/")
+    assert "network-allowed" in page.text
+    assert "<code>127.0.0.1</code>" in page.text
+    assert "<code>127.0.0.0/8</code>" in page.text
+
+
+def test_missing_socket_address_is_denied(sdk):
+    async def without_socket_address(scope, receive, send):
+        scope["client"] = None
+        await lab.app(scope, receive, send)
+
+    with TestClient(without_socket_address) as visitor:
+        page = visitor.get("/")
+        assert "<code>Unknown</code>" in page.text
+        assert "network-denied" in page.text
+        result = visitor.post("/api/demos/support/run", json={"text": "Test"})
+        assert result.status_code == 403
+    lab.AsyncTypeSafeClient.assert_not_called()
