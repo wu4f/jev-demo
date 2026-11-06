@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <p class="eyebrow">THE DECISION PLAYGROUND</p>
+  <h1>What can you<br>build with <span>Jev?</span></h1>
+  <p class="intro">Not another chatbot. Give Jev a situation and focused questions.
+    Get typed answers your code can actually use.</p>
+  <div class="steps"><span>01 &nbsp; Pick a use case</span><span>02 &nbsp; Change the input</span><span>03 &nbsp; Inspect the decision</span></div>
+</section>
+<section class="demo-grid" aria-label="Choose an experiment">
+  {% for demo in demos %}
+  <a class="demo-card" href="/demos/{{ demo.slug }}">
+    <span class="tag">{{ demo.primitive }}</span>
+    <h2>{{ demo.title }}</h2>
+    <p>{{ demo.description }}</p>
+    <span class="card-link">Open experiment <span aria-hidden="true">→</span></span>
+  </a>
+  {% endfor %}
+</section>
+<section class="callout">
+  <h2>The model judges. Your code acts.</h2>
+  <p>Choice picks an option. Score places input on descriptive levels. Noul estimates whether a statement is true.
+    Combine these small judgments in ordinary code instead of asking for a long generated answer.</p>
+</section>
+{% endblock %}

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Jev Lab{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='style.css').path }}">
+  {% block scripts %}{% endblock %}
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="/">Jev<span>Lab</span></a>
+    <span class="header-note">Small questions. Useful decisions.</span>
+    <a href="https://docs.typesafe.ai/introduction" target="_blank" rel="noopener noreferrer">TypeSafe docs ↗</a>
+  </header>
+  <main>{% block content %}{% endblock %}</main>
+  <footer>
+    A learning playground, not a production decision system.
+    Inputs are sent to TypeSafe when you click Run Jev. Use fictional data, not personal information.
+    <br>Model probabilities and confidence are estimates, not guarantees of correctness.
+  </footer>
+</body>
+</html>

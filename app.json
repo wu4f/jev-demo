@@ -1,0 +1,42 @@
+{
+  "name": "jev-lab",
+  "env": {
+    "TYPESAFE_SECRET": {
+      "description": "Existing Secret Manager secret name containing your TypeSafe API key (not the key itself)",
+      "required": true,
+      "order": 1
+    },
+    "TYPESAFE_SECRET_VERSION": {
+      "description": "Enabled numeric version of that secret, for example 1",
+      "required": true,
+      "order": 2
+    },
+    "TYPESAFE_DEFAULT_MODEL": {
+      "description": "Jev model or alias",
+      "value": "jev-latest",
+      "order": 3
+    },
+    "JEV_PROXY_ORIGIN": {
+      "description": "Browser origin for the authenticated gcloud proxy",
+      "value": "http://127.0.0.1:8080",
+      "required": false,
+      "order": 4
+    }
+  },
+  "options": {
+    "allow-unauthenticated": false,
+    "memory": "512Mi",
+    "cpu": "1",
+    "port": 8080,
+    "concurrency": 8,
+    "max-instances": 2
+  },
+  "hooks": {
+    "precreate": {
+      "commands": ["bash scripts/cloud-run.sh prepare"]
+    },
+    "postcreate": {
+      "commands": ["bash scripts/cloud-run.sh attach"]
+    }
+  }
+}

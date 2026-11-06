@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}{{ demo.title }} · Jev Lab{% endblock %}
+{% block scripts %}
+<script id="demo-config" type="application/json">{{ config | tojson }}</script>
+<script src="{{ url_for('static', path='app.js').path }}" defer></script>
+{% endblock %}
+{% block content %}
+<nav class="demo-nav" aria-label="Experiments">
+  <a href="/">All experiments</a>
+  {% for item in demos %}
+  <a href="/demos/{{ item.slug }}" {% if item.slug == demo.slug %}aria-current="page"{% endif %}>{{ item.title }}</a>
+  {% endfor %}
+</nav>
+<section class="page-heading">
+  <p class="eyebrow">{{ demo.primitive }}</p>
+  <h1>{{ demo.title }}</h1>
+  <p class="intro">{{ demo.description }}</p>
+</section>
+<div class="lesson"><strong>The idea</strong><p>{{ demo.lesson }}</p></div>
+{% if not configured %}
+<p class="notice">Live API calls are not configured. Set TYPESAFE_API_KEY in .env locally, or bind it from Secret Manager on Cloud Run, then restart or redeploy.</p>
+{% endif %}
+<div class="workspace">
+  <section class="panel input-panel">
+    <div class="panel-heading"><h2>01 / Your input</h2><span class="tag">Editable state</span></div>
+    <div class="examples" aria-label="Load an example">
+      {% for example in demo.examples %}
+      <button type="button" class="example secondary" data-index="{{ loop.index0 }}">{{ example.label }}</button>
+      {% endfor %}
+    </div>
+    <form id="run-form">
+      <label for="state">Text to evaluate</label>
+      <textarea id="state" name="text" rows="9" maxlength="6000" required>{{ demo.examples[0].text }}</textarea>
+      <div class="input-meta"><span id="char-count"></span><span>No calls while typing</span></div>
+      <button class="primary" id="run" type="submit">Run Jev <span aria-hidden="true">→</span></button>
+    </form>
+    <p id="error" class="error" role="alert" hidden></p>
+    <details class="questions">
+      <summary>What are we asking Jev?</summary>
+      {% for name, question in demo.questions.items() %}
+      <article><span class="tag">{{ question.type }}</span><h3>{{ name | replace('_', ' ') }}</h3>
+        <p>{{ question.instructions }}</p>
+        {% if question.criteria is defined and question.criteria is not none %}
+        <ul>
+          {% if question.criteria is mapping %}
+            {% for key, value in question.criteria.items() %}<li><strong>{{ key }}:</strong> {{ value }}</li>{% endfor %}
+          {% else %}
+            {% for value in question.criteria %}<li><strong>{{ loop.index0 }}:</strong> {{ value }}</li>{% endfor %}
+          {% endif %}
+        </ul>
+        {% endif %}
+      </article>
+      {% endfor %}
+    </details>
+  </section>
+  <section class="panel results-panel" aria-label="Jev results" aria-busy="false">
+    <div class="panel-heading"><h2>02 / Jev's answers</h2><span id="latency" class="meta">Awaiting a run</span></div>
+    <p id="status" role="status" aria-live="polite">Edit the example, then run Jev to see real API results.</p>
+    <div id="results"></div>
+    {% if demo.slug == "automation" %}
+    <section class="policy">
+      <h3>Your code's policy</h3>
+      <p>Teaching thresholds only. No ticket is actually routed.</p>
+      <label for="route-threshold">Auto-route when chosen option probability ≥ <output id="route-value">80%</output></label>
+      <input id="route-threshold" type="range" min="0" max="100" value="80">
+      <label for="urgent-threshold">Flag urgent when urgency probability ≥ <output id="urgent-value">70%</output></label>
+      <input id="urgent-threshold" type="range" min="0" max="100" value="70">
+      <p id="policy-result" class="decision" aria-live="polite">Run an input to evaluate this rule.</p>
+      <pre><code>if chosen_probability &lt; route_threshold:
+    request_human_review()
+else:
+    route_to(chosen_department)
+if urgency_probability &gt;= urgent_threshold:
+    flag_urgent()</code></pre>
+    </section>
+    {% endif %}
+    <details id="previous" hidden><summary>Compare with previous run</summary><div id="previous-result"></div></details>
+  </section>
+</div>
+<section class="callout"><h2>Try this next</h2><p>{{ demo.experiment }}</p></section>
+<section class="inspector">
+  <h2>03 / Under the hood</h2>
+  <div class="inspect-grid">
+    <details><summary>Request JSON <span id="request-caption">(preview)</span></summary><pre id="request-json"></pre></details>
+    <details><summary>Response JSON</summary><pre id="response-json">Run an experiment to see the response.</pre></details>
+  </div>
+  <p class="meta">Confidence summarizes the shape of the probability distribution; it is not a guarantee of accuracy.
+    Noul returns a probability, not a separate confidence value. Latency includes the server's SDK call.</p>
+</section>
+{% endblock %}
