@@ -1,8 +1,8 @@
 # Jev Lab
 
-A local-first FastAPI app for exploring TypeSafe's Jev model. Four individual
+A local-first FastAPI app for exploring TypeSafe's Jev model. Five individual
 experiments cover ticket routing, review scoring, the trolley problem,
-and probability-driven automation.
+LLM guardrails, and probability-driven automation.
 
 [![Run on Google Cloud](https://deploy.cloud.run/button.svg)](https://deploy.cloud.run/?git_repo=https%3A%2F%2Fgithub.com%2Fwu4f%2Fjev-demo.git)
 
@@ -74,6 +74,11 @@ example, and moving policy sliders do not call the API.
   probabilities, not moral correctness; no real action is taken.
 - **Automation:** adjustable probability thresholds applied locally to the
   most recent result. No real tickets are routed.
+- **LLM guardrails:** four independent Noul risk signals for prompt injection,
+  prompt-leaking attempts, jailbreaks, and data exfiltration. Compare attack,
+  indirect-injection, and benign examples, then adjust a local flag-for-review
+  threshold. This simulates screening only; it never calls a downstream LLM or
+  accesses private data, and low probabilities do not guarantee safety.
 
 Each page includes editable input, examples, probability visualizations, the
 returned confidence when available, request/response JSON, latency, and a
@@ -83,6 +88,31 @@ they evaluated and are marked out of date after edits.
 Confidence summarizes the distribution, not a guarantee of accuracy. Noul has
 no separate confidence field. Missing evidence can be an instructive failure:
 inspect the probabilities rather than treating a Score as a fact.
+
+### Try the LLM guardrails demo
+
+Open <http://127.0.0.1:8000/demos/guardrails> locally, or select **Explore LLM
+guardrails** from the homepage. Pages and examples are readable from any
+network; running Jev still requires the authorized network and a configured
+server-side key.
+
+Choose one of seven examples or write your own fictional input, then click
+**Run Jev**. The four preset criteria are visible under **What are we asking
+Jev?** Each returns an independent probability: an input can trigger multiple
+risks, and the probabilities need not sum to 100%. Prompt leaking here means
+an attempt to extract hidden instructions, not proof that a prompt was leaked.
+
+The policy starts at 70% and flags an input for review when **any** risk is
+at or above the threshold. Moving the slider recalculates the simulated
+decision from the last successful run without calling Jev again. Editing the
+input marks those results stale until the next successful run. Compare an
+attack with the benign security-discussion example to explore false positives.
+
+No example instructions are executed: the demo does not call tools, retrieve
+private files, or forward input to a downstream LLM. Input text is sent to
+TypeSafe for evaluation, so do not paste real secrets or confidential data.
+This is a teaching simulation, not production guardrail enforcement or a
+detection benchmark; low scores do not prove safety.
 
 ## Run the container locally
 
@@ -256,12 +286,18 @@ without rebuilding the image.
 .venv/bin/python -m pip install -r requirements-dev.txt
 .venv/bin/python -m pytest
 .venv/bin/python -m ruff check .
-.venv/bin/python -m ruff format --check app.py tests
+.venv/bin/python -m ruff format --check app.py demos.py tests
 bash -n scripts/cloud-run.sh
+node --check static/app.js
+node --test tests/test_guardrails.js
 ```
 
 Tests mock the SDK and gcloud and never spend API credits or modify cloud
-resources. Container smoke tests can use `/health` and the page routes without
+resources. The guardrail UI tests use Node.js's built-in test runner with a
+mocked DOM and API; no npm dependencies or frontend build are needed. They
+check threshold boundaries, overlapping risk signals, no calls while editing
+or moving sliders, stale-input handling, and failed-run result preservation.
+Container smoke tests can use `/health` and the page routes without
 calling Jev. Demo definitions and questions live in `demos.py`; the server,
 templates, and plain JavaScript are in `app.py`,
 `templates/`, and `static/`. The official `typesafe-sdk` validates and serializes

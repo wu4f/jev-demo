@@ -1,3 +1,4 @@
+import json
 from ipaddress import ip_network
 from unittest.mock import AsyncMock, MagicMock
 
@@ -93,6 +94,63 @@ def test_trolley_replaces_removed_pages_in_navigation(client, sdk):
     sdk.system_one.assert_not_called()
 
 
+def test_guardrails_page_exposes_presets_without_running_them(client, sdk):
+    page = client.get("/demos/guardrails")
+    for response in (client.get("/"), page, client.get("/demos/support")):
+        assert 'href="/demos/guardrails"' in response.text
+    config = json.loads(
+        page.text.split('<script id="demo-config" type="application/json">', 1)[1].split(
+            "</script>", 1
+        )[0]
+    )
+    assert set(config["questions"]) == {
+        "prompt_injection",
+        "prompt_leaking",
+        "jailbreak",
+        "data_exfiltration",
+    }
+    assert all(question["type"] == "noul" for question in config["questions"].values())
+    assert {example["label"] for example in config["examples"]} >= {
+        "Prompt injection",
+        "Prompt leaking",
+        "Jailbreak",
+        "Data exfiltration",
+        "Indirect injection",
+        "Benign request",
+        "Benign security discussion",
+    }
+    assert '<details class="questions" open>' in page.text
+    assert 'id="guardrail-threshold"' in page.text
+    assert "no input is sent to a downstream LLM" in page.text
+    assert "low scores do not prove an input is safe" in page.text
+    sdk.system_one.assert_not_called()
+
+
+def test_guardrails_returns_independent_risks_for_untrusted_input(client, sdk):
+    probabilities = {
+        "prompt_injection": 0.95,
+        "prompt_leaking": 0.8,
+        "jailbreak": 0.4,
+        "data_exfiltration": 0.9,
+    }
+    sdk.system_one.return_value = SystemOneResponse(
+        model="jev-test",
+        answers={name: {"type": "noul", "noul": value} for name, value in probabilities.items()},
+        usage={},
+    )
+    text = next(
+        example.text
+        for example in DEMOS["guardrails"].examples
+        if example.label == "Indirect injection"
+    )
+    result = client.post("/api/demos/guardrails/run", json={"text": text})
+    assert result.status_code == 200
+    assert {
+        name: answer["noul"] for name, answer in result.json()["response"]["answers"].items()
+    } == probabilities
+    sdk.system_one.assert_awaited_once_with(state=text, questions=DEMOS["guardrails"].questions)
+
+
 @pytest.mark.parametrize("choice", ["pull_the_lever", "do_nothing"])
 def test_trolley_returns_either_choice_with_probabilities(client, sdk, choice):
     sdk.system_one.return_value = SystemOneResponse(
@@ -120,24 +178,27 @@ def test_trolley_returns_either_choice_with_probabilities(client, sdk, choice):
 
 
 @pytest.mark.parametrize("text", ["", "  \n ", "x" * 6001])
-def test_invalid_input_never_calls_api(client, sdk, text):
-    assert client.post("/api/demos/support/run", json={"text": text}).status_code == 422
+@pytest.mark.parametrize("slug", ["support", "guardrails"])
+def test_invalid_input_never_calls_api(client, sdk, text, slug):
+    assert client.post(f"/api/demos/{slug}/run", json={"text": text}).status_code == 422
     sdk.system_one.assert_not_called()
 
 
-def test_client_cannot_supply_arbitrary_questions(client, sdk):
+@pytest.mark.parametrize("slug", ["support", "guardrails"])
+def test_client_cannot_supply_arbitrary_questions(client, sdk, slug):
     result = client.post(
-        "/api/demos/support/run",
+        f"/api/demos/{slug}/run",
         json={"text": "Hello", "questions": {"anything": {"type": "noul"}}},
     )
     assert result.status_code == 422
     sdk.system_one.assert_not_called()
 
 
-def test_missing_key_keeps_pages_available(client, sdk, monkeypatch):
+@pytest.mark.parametrize("slug", ["support", "guardrails"])
+def test_missing_key_keeps_pages_available(client, sdk, monkeypatch, slug):
     monkeypatch.delenv("TYPESAFE_API_KEY")
-    assert client.get("/demos/support").status_code == 200
-    result = client.post("/api/demos/support/run", json={"text": "Hello"})
+    assert client.get(f"/demos/{slug}").status_code == 200
+    result = client.post(f"/api/demos/{slug}/run", json={"text": "Hello"})
     assert result.status_code == 503
     assert ".env" in result.json()["detail"]
     sdk.system_one.assert_not_called()
@@ -177,9 +238,10 @@ def test_unknown_demo_and_static_file_boundaries(client, sdk):
     sdk.system_one.assert_not_called()
 
 
-def test_cross_origin_call_rejected(client, sdk):
+@pytest.mark.parametrize("slug", ["support", "guardrails"])
+def test_cross_origin_call_rejected(client, sdk, slug):
     result = client.post(
-        "/api/demos/support/run", json={"text": "Hello"}, headers={"origin": "https://other.test"}
+        f"/api/demos/{slug}/run", json={"text": "Hello"}, headers={"origin": "https://other.test"}
     )
     assert result.status_code == 403
     sdk.system_one.assert_not_called()

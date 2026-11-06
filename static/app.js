@@ -86,6 +86,19 @@ function renderAnswers(run, target) {
 }
 
 function updatePolicy() {
+  if (config.slug === "guardrails") {
+    const threshold = Number(byId("guardrail-threshold").value) / 100;
+    byId("guardrail-value").textContent = percent(threshold);
+    if (!latest) return;
+    const flagged = Object.entries(latest.response.answers)
+      .filter(([, answer]) => answer.noul >= threshold)
+      .map(([name, answer]) => `${label(name)} (${percent(answer.noul)})`);
+    const action = flagged.length
+      ? `Flag for human review: ${flagged.join(", ")}.`
+      : "No risks reach this threshold. Continue other checks; this is not proof of safety.";
+    byId("guardrail-result").textContent = `${isStale() ? "Using the last run, not your edits: " : ""}${action}`;
+    return;
+  }
   if (config.slug !== "automation") return;
   const route = Number(byId("route-threshold").value) / 100;
   const urgent = Number(byId("urgent-threshold").value) / 100;
@@ -109,7 +122,7 @@ document.querySelectorAll(".example").forEach((button) => {
   });
 });
 input.addEventListener("input", updateInput);
-for (const id of ["route-threshold", "urgent-threshold"]) {
+for (const id of ["route-threshold", "urgent-threshold", "guardrail-threshold"]) {
   byId(id)?.addEventListener("input", updatePolicy);
 }
 

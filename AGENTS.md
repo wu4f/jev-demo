@@ -4,7 +4,7 @@
 
 - `app.py`: FastAPI routes, `.env` loading, client-IP allowlisting, origin checks, and
   server-side asynchronous TypeSafe SDK calls.
-- `demos.py`: the four demo definitions, examples, and typed Choice/Score/Noul
+- `demos.py`: demo definitions, examples, and typed Choice/Score/Noul
   questions. Keep page descriptions and actual questions consistent here.
 - `templates/`: Jinja pages. Keep static asset URLs relative to the request
   origin so direct Cloud Run and custom-domain access both work.
@@ -14,6 +14,8 @@
 - `tests/test_app.py`: API, IP filtering, and HTTPS origin behavior with a mocked
   TypeSafe SDK.
 - `tests/test_deployment.py`: deployment scripts exercised with a fake gcloud.
+- `tests/test_guardrails.js`: Node.js built-in tests for local guardrail policy,
+  stale results, and errors with a mocked DOM and API; no npm dependencies.
 - `Dockerfile`, `.dockerignore`, `.gcloudignore`: non-root runtime and
   allowlisted build/upload contexts.
 - `app.json`: community Run on Google Cloud button prompts and lifecycle hooks.
@@ -40,9 +42,10 @@ for that process. Do not weaken the deployment's default to make a local test pa
 ```bash
 .venv/bin/python -m pytest -q
 .venv/bin/python -m ruff check .
-.venv/bin/python -m ruff format --check app.py tests
+.venv/bin/python -m ruff format --check app.py demos.py tests
 bash -n scripts/cloud-run.sh
 node --check static/app.js
+node --test tests/test_guardrails.js
 ```
 
 Format changed Python files with Ruff. Keep tests focused on introduced

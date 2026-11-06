@@ -35,7 +35,7 @@
       <button class="primary" id="run" type="submit" {% if not network_access.allowed %}disabled{% endif %}>Run Jev <span aria-hidden="true">→</span></button>
     </form>
     <p id="error" class="error" role="alert" hidden></p>
-    <details class="questions">
+    <details class="questions" {% if demo.slug == "guardrails" %}open{% endif %}>
       <summary>What are we asking Jev?</summary>
       {% for name, question in demo.questions.items() %}
       <article><span class="tag">{{ question.type }}</span><h3>{{ name | replace('_', ' ') }}</h3>
@@ -72,6 +72,24 @@ else:
     route_to(chosen_department)
 if urgency_probability &gt;= urgent_threshold:
     flag_urgent()</code></pre>
+    </section>
+    {% endif %}
+    {% if demo.slug == "guardrails" %}
+    <section class="policy">
+      <h3>Your code's guardrail policy</h3>
+      <p>Flag for review when any risk reaches the threshold. Signals can overlap; these probabilities need not sum to 100%.</p>
+      <label for="guardrail-threshold">Flag when any risk probability ≥ <output id="guardrail-value">70%</output></label>
+      <input id="guardrail-threshold" type="range" min="0" max="100" value="70">
+      <p id="guardrail-result" class="decision" aria-live="polite">Run an input to evaluate this rule.</p>
+      <pre><code>flagged = [
+    risk for risk, probability in risks.items()
+    if probability &gt;= threshold
+]
+if flagged:
+    request_human_review(flagged)
+else:
+    continue_other_checks()</code></pre>
+      <p>This only simulates a decision. It does not block requests, disclose a real prompt, access private data, or call another LLM. A low score is not proof of safety; use layered controls and test on your own use case.</p>
     </section>
     {% endif %}
     <details id="previous" hidden><summary>Compare with previous run</summary><div id="previous-result"></div></details>
